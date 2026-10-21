@@ -59,7 +59,7 @@ def ask_node(state):
     if not state.get("gender"):
         missing.append("gender")
 
-    question = "".join(ASK_TEXT[field] for field in ASK_TEXT)
+    question = "".join(ASK_TEXT[field] for field in missing)
     text = f"为精准匹配，请补充信息：{question}"
 
     return {
@@ -103,5 +103,70 @@ def search_node(state):
 
     return {
         "last_results": results,
+        "step_count": state.get("step_count", 0) + 1,
+    }
+
+
+def route_after_search(state):
+    results = state.get("last_results", [])
+    if results:
+        return "present"
+    if state.get("relax_count", 0) < 2:
+        return "relax"
+    else:
+        return "present"
+
+
+# 整理清单
+def present_node(state):
+    results = state.get("last_results", [])
+    if not results:
+        lines = ["暂时没有找到符合条件的商品，请调整条件后重试"]
+    else:
+        lines = [f"为您找到{len(results)}件商品"]
+        for i, item in enumerate(results, start=1):
+            lines.append(
+                f"{i},{item['brand']},货号{item['sku']},胸围{item['chest_cm']},衣长{item['length_cm']},图片：{', '.join(item['images'])}",
+            )
+    text = "\n".join(lines)
+
+    return {
+        "reply": text,
+        "messages": [AIMessage(content=text)],
+    }
+
+
+# 放宽条件重筛
+def relax_node(state):
+    body = CustomerBody(
+        height_cm=state.get("height_cm"),
+        weight_kg=state.get("weight_kg"),
+        gender=state.get("gender"),
+        fit_preference=state.get("fit_preference"),
+    )
+
+    params = SearchParams(
+        category=state.get("category"),
+        brand=state.get("brand"),
+        max_price=state.get("max_price"),
+    )
+
+    size = body_to_search_params(body, category=params.category)
+    n = state.get("relax_count", 0) + 1
+    extra = 4 * n
+    params.chest_min = size.chest_min - extra
+    params.chest_max = size.chest_max + extra
+    params.length_min = size.length_min - extra // 2
+    params.length_max = size.length_max + extra // 2
+
+    db = SessionLocal()
+    try:
+        results = search_products(db, params)
+    finally:
+        db.close()
+
+    return {
+        "last_results": results,
+        "relax_count": n,
         "step_count": state.get("step_count", 0) + 1,
     }
