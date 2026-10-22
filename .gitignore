@@ -23,3 +23,6 @@ static/images/
 # 操作系统垃圾文件
 .DS_Store
 Thumbs.db
+
+# 临时演示文件
+demo.py
