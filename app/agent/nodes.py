@@ -2,6 +2,8 @@
 
 from app.intake import parse_customer_input
 
+MAX_STEP = 10
+
 
 # 理解用户输入，更新状态
 def understand_node(state):
@@ -24,7 +26,7 @@ def understand_node(state):
     if params.max_price is not None:
         update["max_price"] = params.max_price
 
-    update["step_count"] = state.get("step_count", 0) + 1
+    update["step_count"] = 1
     return update
 
 
@@ -108,6 +110,9 @@ def search_node(state):
 
 
 def route_after_search(state):
+    if state.get("step_count", 0) >= MAX_STEP:
+        return "stop"
+
     results = state.get("last_results", [])
     if results:
         return "present"
@@ -169,4 +174,12 @@ def relax_node(state):
         "last_results": results,
         "relax_count": n,
         "step_count": state.get("step_count", 0) + 1,
+    }
+
+
+def stop_node(state):
+    text = "抱歉，当前查询过于复杂，请重新输入需求"
+    return {
+        "reply": text,
+        "messages": [AIMessage(content=text)],
     }
